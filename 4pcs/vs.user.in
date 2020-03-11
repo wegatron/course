@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LocalDebuggerEnvironment>path=${Boost_LIBRARY_DIRS};${FLANN_ROOT}/bin;${G2O_ROOT}/bin;${ACTIVE_QT_DIR}/bin;$ENV{HOME}/usr/pcl1.8.1/bin;$ENV{HOME}/usr/Qhull/bin;$ENV{HOME}/usr/OpenNI2/Tools;E:/usr/zsw_lib/bin</LocalDebuggerEnvironment>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArguments>-i F:/data/3d-data/wangjinyi/map/Node3DDir-20181017T170336/LASER3D_0_0.bin F:/data/3d-data/wangjinyi/map/Node3DDir-20181017T170336/graph_20181228T162910.txt -r F:/data/tmp/4pcs_res/res.vtk -o 0.8 -d 0.2 -n 2000 -pos 0.2913 0 0</LocalDebuggerCommandArguments>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LocalDebuggerEnvironment>path=${Boost_LIBRARY_DIRS};${FLANN_ROOT}/bin;${G2O_ROOT}/bin;${ACTIVE_QT_DIR}/bin;$ENV{HOME}/usr/pcl1.8.1/bin;$ENV{HOME}/usr/Qhull/bin;$ENV{HOME}/usr/OpenNI2/Tools;E:/usr/zsw_lib/bin</LocalDebuggerEnvironment>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArguments>-i F:/data/3d-data/wangjinyi/map/Node3DDir-20181017T170336/LASER3D_0_0.bin F:/data/3d-data/wangjinyi/map/Node3DDir-20181017T170336/graph_20181228T162910.txt -r F:/data/tmp/4pcs_res/res.vtk -o 0.8 -d 0.2 -n 2000 -pos 0.2913 0 0</LocalDebuggerCommandArguments>
+  </PropertyGroup>
+</Project>

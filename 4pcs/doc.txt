@@ -1,0 +1,1 @@
+-i F:/data/3d-data/wangjinyi/map/Node3DDir-20181017T170336/LASER3D_0_487.bin F:/data/3d-data/wangjinyi/map/Node3DDir-20181017T170336/LASER3D_0_488.bin -r F:/data/tmp/4pcs_res/res.vtk -o 0.6 -d 0.09 -n 2000 -a 0.5

@@ -1,0 +1,25 @@
+内存管理, 重载new delete, new [], delete []
+slab buddy
+
+opencv Mat
+mat.at 耗时, 直接使用ptr
+
+slam debug
+
+colmap
+sfm工具
+
+
+发展方向:
+slam深度学习
+
+slam结合其他领域, (sfm)
+
+优化
+
+
+event camera
+鱼眼传感器, 全景, 多相机
+
+
+可以通过sfm得到真值
