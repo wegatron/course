@@ -57,11 +57,14 @@ void detectFeatures(const Eigen::Matrix4d &Twc, const Eigen::Matrix3d &K,
     }
 }
 
+/**
+ * \brief feature_match calculate and return match of pair <obvs_id1, obvs_id2>
+ */
 std::vector<FMatch> feature_match(const Frame &frame1, const Frame &frame2, float outlier_rate = 0.0f)
 {
     const std::vector<int32_t> &obvs1 = frame1.fts_obvs_;
     const std::vector<int32_t> &obvs2 = frame2.fts_obvs_;
-    std::map<int32_t, int32_t> obvs_map;
+    std::map<int32_t, int32_t> obvs_map; // map from landmark id to observation feature point id
     for(size_t n = 0 ; n < obvs1.size() ; n++)
     {
         if (obvs1[n] < 0) continue;
@@ -299,6 +302,7 @@ int main()
 #endif
 
     cv::Mat cv_K = (cv::Mat_<double>(3, 3) << 480, 0, 320, 0, 480, 240, 0, 0, 1);
+    cv::Mat cv_K_flt; cv_K.convertTo(cv_K_flt, CV_32F);
     //cv::Mat cv_K = (cv::Mat_<double>(3, 3) << 1, 0, 1, 0, 480, 240, 0, 0, 1);
     Eigen::Matrix3d K;
     cv::cv2eigen(cv_K, K);
@@ -440,9 +444,11 @@ int main()
 
             /* create new mappoints */
             // TODO homework
-            // cv::Mat cv_P1, cv_P2;
-            // cv_P1=...
-            // cv_P2=...
+            cv::Mat cv_P1(3, 4, CV_32F, cv::Scalar(0));
+            cv_K_flt.copyTo(cv_P1.colRange(0,3));
+            cv::Mat cv_P2(3,4, CV_32F);
+            Eigen::Matrix<float,3,4> P2_e = (K * (frame_curr.Twc_.inverse()*frame_last.Twc_).block<3,4>(0,0)).cast<float>();
+            cv::eigen2cv(P2_e, cv_P2);
 
             for (size_t n = 0; n < matches.size(); n++)
             {
@@ -462,10 +468,11 @@ int main()
                 cv::Mat p3d_c1;
                 // TODO homework
                 // solve the mappoint
-                // ...
-                // TwoViewGeometry::Triangulate(...);
+                cv::Point2f pt1(frame_last.fts_[idx_last][0], frame_last.fts_[idx_last][1]);
+                cv::Point2f pt2(frame_curr.fts_[idx_curr][0], frame_curr.fts_[idx_curr][1]);
+                TwoViewGeometry::Triangulate(pt1, pt2, cv_P1, cv_P2, p3d_c1);
                 // remove the 'continue'
-                continue;
+                // continue;
 
                 if(!std::isfinite(p3d_c1.at<float>(0)) ||
                     !std::isfinite(p3d_c1.at<float>(1)) ||
