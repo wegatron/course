@@ -6,7 +6,7 @@
 #include <Eigen/Geometry>
 #include <Eigen/StdVector>
 
-#include "Thirdparty/g2o/g2o/types/se3quat.h"
+#include "g2o/types/slam3d/se3quat.h"
 
 class Converter{
 public:
