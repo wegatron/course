@@ -38,16 +38,15 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
     int frame_id_curr = frame_curr.idx_;
 
     g2o::VertexSE3Expmap *v_last = new g2o::VertexSE3Expmap;
-    //v_last->setEstimate(Converter::toSE3Quat(last_Tcw));
-    //v_last->setId(0);
-    //v_last->setFixed(true);
-    //optimizer.addVertex(v_last);
-    return;
+    v_last->setEstimate(Converter::toSE3Quat(last_Tcw));
+    v_last->setId(0);
+    v_last->setFixed(true);
+    optimizer.addVertex(v_last);
 
     g2o::VertexSE3Expmap *v_cur = new g2o::VertexSE3Expmap;
     v_cur->setEstimate(Converter::toSE3Quat(curr_Tcw));
     v_cur->setId(1);
-    //optimizer.addVertex(v_cur);
+    optimizer.addVertex(v_cur);
 
     const float thHuber2D = sqrt(5.99);
     const float thHuber3D = sqrt(7.815);
@@ -77,13 +76,12 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
             pv->setEstimate(mpt);
             pv->setId(ind+2);
             pv->setMarginalized(true);
-            //optimizer.addVertex(pv);
+            optimizer.addVertex(pv);
             pvs[i] = pv;
 
             g2o::EdgeSE3ProjectXYZ * eg_last = new g2o::EdgeSE3ProjectXYZ;
-
             eg_last->setVertex(0, pv);
-            //eg_last->setVertex(1, v_last);
+            eg_last->setVertex(1, v_last);
             eg_last->setMeasurement(Eigen::Vector2d(frame_last.fts_[idx_last][0], frame_last.fts_[idx_last][1]));
             eg_last->setInformation(Eigen::Matrix2d::Identity());
             eg_last->fx =fx;
@@ -91,10 +89,10 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
             eg_last->cx = cx;
             eg_last->cy = cy;
 
-//            g2o::RobustKernelHuber *rk_last = new g2o::RobustKernelHuber;
-//            rk_last->setDelta(thHuber2D);
-//            eg_last->setRobustKernel(rk_last);
-            //optimizer.addEdge(eg_last);
+            g2o::RobustKernelHuber *rk_last = new g2o::RobustKernelHuber;
+            rk_last->setDelta(thHuber2D);
+            eg_last->setRobustKernel(rk_last);
+            optimizer.addEdge(eg_last);
 
             g2o::EdgeSE3ProjectXYZ * eg_cur = new g2o::EdgeSE3ProjectXYZ;
             eg_cur->setVertex(0, pv);
@@ -105,18 +103,17 @@ void two_view_ba(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vecto
             eg_cur->fy = fy;
             eg_cur->cx = cx;
             eg_cur->cy = cy;
-//            g2o::RobustKernelHuber *rk_cur = new g2o::RobustKernelHuber;
-//            rk_cur->setDelta(thHuber2D);
-//            eg_cur->setRobustKernel(rk_cur);
-            //optimizer.addEdge(eg_cur);
+            g2o::RobustKernelHuber *rk_cur = new g2o::RobustKernelHuber;
+            rk_cur->setDelta(thHuber2D);
+            eg_cur->setRobustKernel(rk_cur);
+            optimizer.addEdge(eg_cur);
             ++ind;
         }
     }
 
-    return;
     // Optimize!
-    //optimizer.initializeOptimization();
-    //optimizer.optimize(n_iter);
+    optimizer.initializeOptimization();
+    optimizer.optimize(n_iter);
 
     // TODO homework
     // Recover optimized data
