@@ -109,28 +109,78 @@ std::vector<FMatch> feature_match(const Frame &frame1, const Frame &frame2, floa
 void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::vector<FMatch> &matches)
 {
     const double sigma = 1.0;
-    const double thr = sigma * 4;
+    const double thr2 = 16;
+
     std::list<double> rpj_err;
+    Eigen::Matrix4d Tcw_l = frame_last.Twc_.inverse();
+    Eigen::Matrix4d Tcw_c = frame_curr.Twc_.inverse();
+#if 1
+    double fx = frame_last.K_(0,0);
+    double fy = frame_last.K_(1,1);
+    double cx = frame_last.K_(0,2);
+    double cy = frame_last.K_(1,2);
+#else
+    // x1 * [t12]_x R12 x2
+    Eigen::Matrix4d Tcl = Tcw_c * frame_last.Twc_;
+    Eigen::Matrix3d Rcl = Tcl.block<3,3>(0,0);
+    Eigen::Matrix3d tcl_skew;
+    tcl_skew << 0, -Tcl(2,3), Tcl(1,3),
+        Tcl(2,3), 0, -Tcl(0,3),
+        -Tcl(1,3), Tcl(0,3), 0;
+    Eigen::Matrix3d K_inv = frame_last.K_.inverse();
+    Eigen::Matrix3d Fcl = K_inv.transpose() * tcl_skew * Rcl * K_inv;
+#endif
+    int cnt_out = 0;
     for (size_t n = 0; n < matches.size(); n++)
     {
+        if(matches[n].outlier) continue;
         uint32_t idx_curr = matches[n].first;
         uint32_t idx_last = matches[n].second;
         int32_t mpt_idx = frame_last.mpt_track_[idx_last];
 
         if (mpt_idx < 0) { continue; }
         Eigen::Vector3d &mpt = map.mpts_[mpt_idx];
-        // TODO homework
-        // ....
-        // if (...)
-        // {
-        //     matches[n].outlier = true;
-        // }
+        Eigen::Vector3d ptc_curr= Tcw_c.block<3,3>(0,0) * mpt + Tcw_c.block<3,1>(0,3);
+        Eigen::Vector3d ptc_last= Tcw_l.block<3,3>(0,0) * mpt + Tcw_l.block<3,1>(0,3);
+
+        Eigen::Vector3d norm_c = (ptc_curr - frame_curr.Twc_.block<3,1>(0,3));
+        Eigen::Vector3d norm_l = (ptc_last - frame_last.Twc_.block<3,1>(0,3));
+        double cos_parallax = norm_c.dot(norm_l) / (norm_c.norm()*norm_l.norm());
+
+        if(ptc_curr[2]<0 || ptc_last[2]<0 || cos_parallax>0.9998) { matches[n].outlier=true; continue; }
+#if 1
+        // reproject by rt
+        Eigen::Vector2d ptc(fx*ptc_curr.x()/ptc_curr.z()+cx, fx*ptc_curr.y()/ptc_curr.z() + cy);
+        Eigen::Vector2d ob_ptc(frame_curr.fts_[idx_curr].x(), frame_curr.fts_[idx_curr].y());
+
+        Eigen::Vector2d ptl(fx*ptc_last.x()/ptc_last.z()+cx, fx*ptc_last.y()/ptc_last.z() + cy);
+        Eigen::Vector2d ob_ptl(frame_last.fts_[idx_last].x(), frame_last.fts_[idx_last].y());
+//        matches[n].outlier = matches[n].outlier_gt;
+        matches[n].outlier = (ptc-ob_ptc).squaredNorm() > thr2 || (ptl-ob_ptl).squaredNorm()>thr2;
+#else
+        // X1 * [t]_x R X2
+        Eigen::Vector3d ob_ptc(frame_curr.fts_[idx_curr].x(), frame_curr.fts_[idx_curr].y(), 1);
+        Eigen::Vector3d ob_ptl(frame_last.fts_[idx_last].x(), frame_last.fts_[idx_last].y(), 1);
+        Eigen::Vector3d l = Fcl * ob_ptl;
+        double den = l[0]*l[0] + l[1]*l[1];
+        if(den < 1e-8) { matches[n].outlier = true; continue; }
+        double num = ob_ptc.dot(l);
+        matches[n].outlier = num*num/den > 4;
+        if(matches[n].outlier != matches[n].outlier_gt) {
+            std::cout << "outlier reject fail" << std::endl;
+            std::cout << num*num/den << std::endl;
+        }
+#endif
+        if(matches[n].outlier) ++cnt_out;
     }
+    std::cout << "new outlier :" << cnt_out << std::endl;
+
 
     for (size_t n = 0; n < matches.size(); n++)
     {
         if (matches[n].outlier)
         {
+
             uint32_t idx_curr = matches[n].first;
             frame_curr.mpt_track_[idx_curr] = -1;
         }
@@ -151,8 +201,7 @@ bool createInitMap(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vec
     std::vector<cv::Point2f> point_curr;
     std::vector<cv::Point2f> point_last;
     point_curr.reserve(matches.size());
-    point_last.reserve(matches.size());
-    for(size_t n = 0 ; n < matches.size() ; n++)
+    point_last.reserve(matches.size());    for(size_t n = 0 ; n < matches.size() ; n++)
     {  
         uint32_t idx_curr = matches[n].first;
         uint32_t idx_last = matches[n].second;
@@ -333,7 +382,7 @@ int main()
 
         /* get matched features */
         frame_curr.mpt_track_ = std::vector<int32_t>(landmarks.size(), -1);
-        std::vector<FMatch> matches = feature_match(frame_curr, frame_last, 0.0);
+        std::vector<FMatch> matches = feature_match(frame_curr, frame_last, 0.05);
         assert(!matches.empty());
 
         std::cout << "[" << std::setw(3) << frame_curr.idx_ << "] match features " << matches.size() << std::endl;
