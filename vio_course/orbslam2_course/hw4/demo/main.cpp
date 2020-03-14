@@ -111,10 +111,9 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
     const double sigma = 1.0;
     const double thr2 = 16;
 
-    std::list<double> rpj_err;
     Eigen::Matrix4d Tcw_l = frame_last.Twc_.inverse();
     Eigen::Matrix4d Tcw_c = frame_curr.Twc_.inverse();
-#if 1
+#if 0
     double fx = frame_last.K_(0,0);
     double fy = frame_last.K_(1,1);
     double cx = frame_last.K_(0,2);
@@ -129,6 +128,31 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
         -Tcl(1,3), Tcl(0,3), 0;
     Eigen::Matrix3d K_inv = frame_last.K_.inverse();
     Eigen::Matrix3d Fcl = K_inv.transpose() * tcl_skew * Rcl * K_inv;
+    std::cout << Fcl.determinant() << std::endl;
+
+    {
+        Eigen::Matrix3d Rwc2 = frame_last.Twc_.block<3,3>(0,0);
+        Eigen::Vector3d twc2 = frame_last.Twc_.block<3,1>(0,3);
+
+        Eigen::Matrix3d Rwc1 = frame_curr.Twc_.block<3,3>(0,0);
+        Eigen::Vector3d twc1 = frame_curr.Twc_.block<3,1>(0,3);
+
+        Eigen::Matrix3d R12 = Rwc1.transpose()*Rwc2;
+        Eigen::Vector3d t12 = Rwc1.transpose()*(twc1 - twc2);
+        std::cout << "-----" << std::endl;
+        std::cout << R12 << std::endl;
+        std::cout << Tcl.block<3,3>(0,0) << std::endl;
+        std::cout << t12.transpose() << std::endl;
+        std::cout << Tcl.block<3,1>(0,3).transpose() << std::endl;
+//        Eigen::Matrix3d t12x;
+//        t12x << 0, -t12[2], t12[1],
+//            t12[2], 0, -t12[0],
+//            -t12[1], t12[0], 0;
+//        Eigen::Matrix3d K_inv = frame_last.K_.inverse();
+//        Eigen::Matrix3d F12 = K_inv.transpose() * t12x * R12 * K_inv;
+
+//        std::cout << Fcl - F12 << std::endl;
+    }
 #endif
     int cnt_out = 0;
     for (size_t n = 0; n < matches.size(); n++)
@@ -148,7 +172,7 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
         double cos_parallax = norm_c.dot(norm_l) / (norm_c.norm()*norm_l.norm());
 
         if(ptc_curr[2]<0 || ptc_last[2]<0 || cos_parallax>0.9998) { matches[n].outlier=true; continue; }
-#if 1
+#if 0
         // reproject by rt
         Eigen::Vector2d ptc(fx*ptc_curr.x()/ptc_curr.z()+cx, fx*ptc_curr.y()/ptc_curr.z() + cy);
         Eigen::Vector2d ob_ptc(frame_curr.fts_[idx_curr].x(), frame_curr.fts_[idx_curr].y());
@@ -165,7 +189,8 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
         double den = l[0]*l[0] + l[1]*l[1];
         if(den < 1e-8) { matches[n].outlier = true; continue; }
         double num = ob_ptc.dot(l);
-        matches[n].outlier = num*num/den > 4;
+        std::cout << num << std::endl;
+        matches[n].outlier = num*num/den > 16;
         if(matches[n].outlier != matches[n].outlier_gt) {
             std::cout << "outlier reject fail" << std::endl;
             std::cout << num*num/den << std::endl;
