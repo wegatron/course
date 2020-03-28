@@ -47,3 +47,4 @@ backup
 *.tar.gz
 devel
 .catkin_workspace
+data

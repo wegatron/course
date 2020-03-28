@@ -108,6 +108,42 @@ std::vector<FMatch> feature_match(const Frame &frame1, const Frame &frame2, floa
 
 void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::vector<FMatch> &matches)
 {
+
+  Eigen::Matrix3d Re;
+  Eigen::Vector3d te;
+
+    // find fundmental
+    cv::Mat F21;
+    cv::Mat inliers;
+    {
+
+        std::vector<cv::Point2f> pts_last, pts_curr;
+        pts_last.reserve(matches.size()); pts_curr.reserve(matches.size());
+        for(auto &mc : matches) {
+            //if(mc.outlier) continue;
+            int idx_curr = mc.first;
+            int idx_last = mc.second;
+            pts_last.emplace_back(frame_last.fts_[idx_last].x(), frame_last.fts_[idx_last].y());
+            pts_curr.emplace_back(frame_curr.fts_[idx_curr].x(), frame_curr.fts_[idx_curr].y());
+        }
+        F21 = cv::findFundamentalMat(pts_last, pts_curr, cv::FM_RANSAC, 3, 0.99, inliers);
+//        cv::Mat cv_K;
+//        cv::eigen2cv(frame_last.K_, cv_K);
+//        cv::Mat E = cv_K.t() * F21 * cv_K;
+//        std::cout << "EEE:" << std::endl;
+//        std::cout << E << std::endl;
+//        cv::Mat cv_R, cv_t;
+//        cv::recoverPose(E, pts_last, pts_curr, cv_K, cv_R, cv_t, inliers);
+//        std::cout << "FF:" << std::endl;
+//        std::cout << F21 << std::endl;
+//        std::cout << "-----" << std::endl;
+
+//        std::cout << cv_R << std::endl;
+//        std::cout << cv_t << std::endl;
+
+//        cv::cv2eigen(cv_t, te);
+//        cv::cv2eigen(cv_R, Re);
+    }
     const double sigma = 1.0;
     const double thr2 = 16;
 
@@ -119,45 +155,60 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
     double cx = frame_last.K_(0,2);
     double cy = frame_last.K_(1,2);
 #else
+    Eigen::Matrix3d Fcl;
+    cv::cv2eigen(F21, Fcl);
     // x1 * [t12]_x R12 x2
-    Eigen::Matrix4d Tcl = Tcw_c * frame_last.Twc_;
-    Eigen::Matrix3d Rcl = Tcl.block<3,3>(0,0);
-    Eigen::Matrix3d tcl_skew;
-    tcl_skew << 0, -Tcl(2,3), Tcl(1,3),
-        Tcl(2,3), 0, -Tcl(0,3),
-        -Tcl(1,3), Tcl(0,3), 0;
-    Eigen::Matrix3d K_inv = frame_last.K_.inverse();
-    Eigen::Matrix3d Fcl = K_inv.transpose() * tcl_skew * Rcl * K_inv;
-    std::cout << Fcl.determinant() << std::endl;
+//    Eigen::Matrix3d Rcl2 =
+//      frame_curr.Twc_.block<3,3>(0,0).transpose() * frame_last.Twc_.block<3,3>(0,0);
+//    Eigen::Matrix4d Tcl = Tcw_c * frame_last.Twc_;
+//    Eigen::Matrix3d Rcl = Tcl.block<3,3>(0,0);
+//    Eigen::Matrix3d tcl_skew;
+//    tcl_skew << 0, -Tcl(2,3), Tcl(1,3),
+//        Tcl(2,3), 0, -Tcl(0,3),
+//        -Tcl(1,3), Tcl(0,3), 0;
+//    Eigen::Matrix3d K_inv = frame_last.K_.inverse();
+//    Eigen::Matrix3d Fcl = K_inv.transpose() * tcl_skew * Rcl * K_inv;
+//    std::cout << "Fcl:" << std::endl;
+//    std::cout << Fcl << std::endl;
+//    std::cout << "-----" << std::endl;
+//    std::cout << Rcl << std::endl;
+//    std::cout << "*****" << std::endl;
+//    std::cout << Tcl.block<3,1>(0,3).transpose() << std::endl;
 
-    {
-        Eigen::Matrix3d Rwc2 = frame_last.Twc_.block<3,3>(0,0);
-        Eigen::Vector3d twc2 = frame_last.Twc_.block<3,1>(0,3);
+//    std::cout << "#########" << std::endl;
+//    std::cout << Rcl*Re.transpose() << std::endl;
+//    std::cout << Fcl.determinant() << std::endl;
 
-        Eigen::Matrix3d Rwc1 = frame_curr.Twc_.block<3,3>(0,0);
-        Eigen::Vector3d twc1 = frame_curr.Twc_.block<3,1>(0,3);
+//    {
+//        Eigen::Matrix3d Rwc2 = frame_last.Twc_.block<3,3>(0,0);
+//        Eigen::Vector3d twc2 = frame_last.Twc_.block<3,1>(0,3);
 
-        Eigen::Matrix3d R12 = Rwc1.transpose()*Rwc2;
-        Eigen::Vector3d t12 = Rwc1.transpose()*(twc1 - twc2);
-        std::cout << "-----" << std::endl;
-        std::cout << R12 << std::endl;
-        std::cout << Tcl.block<3,3>(0,0) << std::endl;
-        std::cout << t12.transpose() << std::endl;
-        std::cout << Tcl.block<3,1>(0,3).transpose() << std::endl;
-//        Eigen::Matrix3d t12x;
-//        t12x << 0, -t12[2], t12[1],
-//            t12[2], 0, -t12[0],
-//            -t12[1], t12[0], 0;
-//        Eigen::Matrix3d K_inv = frame_last.K_.inverse();
-//        Eigen::Matrix3d F12 = K_inv.transpose() * t12x * R12 * K_inv;
+//        Eigen::Matrix3d Rwc1 = frame_curr.Twc_.block<3,3>(0,0);
+//        Eigen::Vector3d twc1 = frame_curr.Twc_.block<3,1>(0,3);
 
-//        std::cout << Fcl - F12 << std::endl;
-    }
+//        Eigen::Matrix3d R12 = Rwc1.transpose()*Rwc2;
+//        Eigen::Vector3d t12 = Rwc1.transpose()*(twc1 - twc2);
+//        std::cout << "-----" << std::endl;
+//        std::cout << R12 << std::endl;
+//        std::cout << Tcl.block<3,3>(0,0) << std::endl;
+//        std::cout << t12.transpose() << std::endl;
+//        std::cout << Tcl.block<3,1>(0,3).transpose() << std::endl;
+////        Eigen::Matrix3d t12x;
+////        t12x << 0, -t12[2], t12[1],
+////            t12[2], 0, -t12[0],
+////            -t12[1], t12[0], 0;
+////        Eigen::Matrix3d K_inv = frame_last.K_.inverse();
+////        Eigen::Matrix3d F12 = K_inv.transpose() * t12x * R12 * K_inv;
+////        std::cout << Fcl - F12 << std::endl;
+//    }
 #endif
+    std::cout << "inliers type:" << inliers.type() << std::endl;
     int cnt_out = 0;
     for (size_t n = 0; n < matches.size(); n++)
     {
         if(matches[n].outlier) continue;
+        matches[n].outlier = !inliers.at<uint8_t>(n);
+        continue;
         uint32_t idx_curr = matches[n].first;
         uint32_t idx_last = matches[n].second;
         int32_t mpt_idx = frame_last.mpt_track_[idx_last];
@@ -189,7 +240,7 @@ void outlier_rejection(Frame &frame_last,Frame &frame_curr, LoaclMap &map, std::
         double den = l[0]*l[0] + l[1]*l[1];
         if(den < 1e-8) { matches[n].outlier = true; continue; }
         double num = ob_ptc.dot(l);
-        std::cout << num << std::endl;
+        //std::cout << num << std::endl;
         matches[n].outlier = num*num/den > 16;
         if(matches[n].outlier != matches[n].outlier_gt) {
             std::cout << "outlier reject fail" << std::endl;
@@ -226,7 +277,8 @@ bool createInitMap(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vec
     std::vector<cv::Point2f> point_curr;
     std::vector<cv::Point2f> point_last;
     point_curr.reserve(matches.size());
-    point_last.reserve(matches.size());    for(size_t n = 0 ; n < matches.size() ; n++)
+    point_last.reserve(matches.size());
+    for(size_t n = 0 ; n < matches.size() ; n++)
     {  
         uint32_t idx_curr = matches[n].first;
         uint32_t idx_last = matches[n].second;
@@ -238,7 +290,17 @@ bool createInitMap(Frame &frame_last, Frame &frame_curr, LoaclMap &map, std::vec
     Eigen::Matrix4d T_curr_last;
 
     cv::Mat inlier_mask;
+    cv::Mat inliers;
+    cv::Mat cv_F = cv::findFundamentalMat(point_last, point_curr, cv::FM_RANSAC, 3, 0.99, inliers);
+
     cv::Mat cv_E = cv::findEssentialMat(point_last, point_curr, cv_K, cv::RANSAC, 0.999, 1.0, inlier_mask);
+    std::cout << "Initial:" << std::endl;
+    std::cout << cv_F << std::endl;
+    std::cout << cv_E << std::endl;
+    cv::Mat cv_K64;
+    cv_K.convertTo(cv_K64, CV_64F);
+    std::cout << cv_K64.t() * cv_F * cv_K64 << std::endl;
+
 
     int num_inlier_F = cv::countNonZero(inlier_mask);
     printf("%d - F inlier: %d(%d)\n", i, num_inlier_F, (int)point_curr.size());
