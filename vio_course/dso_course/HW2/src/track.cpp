@@ -177,9 +177,10 @@ void hw::Tracker::computeResidual(const Sophus::SE3d& state)
             patch_dI_.row(i_ftr*pattern_.size()+pattern_count) = Eigen::Vector2d(dx, dy);
 
             // TODO calculate residual res = ref - cur may need to add huber
-            auto res_raw = fabs(pattern_value-data_patch_ref[pattern_count]);
-            hw[pattern_count] = res_raw < setting_huber_th ? 1 : sqrt(setting_huber_th/res_raw);
-            residual_pattern[pattern_count] = hw[pattern_count] * res_raw;
+            auto res = pattern_value-data_patch_ref[pattern_count];
+            auto fabs_res = fabs(res);
+            hw[pattern_count] = fabs_res < setting_huber_th ? 1 : sqrt(setting_huber_th/fabs_res);
+            residual_pattern[pattern_count] = hw[pattern_count] * res;
             ++pattern_count;
         }
 
@@ -193,12 +194,37 @@ void hw::Tracker::computeResidual(const Sophus::SE3d& state)
             *iter_vis_ftr = false;
             continue;
         }
-
         // TODO calculate Jacobian
+        Eigen::Matrix<double, 8, 6> ref_mat;
         {
-            // Eigen::Matrix<double, 2, 6> jacob_xyz2uv;
+            const double Z_inv = 1.0/point_cur.z();
+            const double Z2_inv = Z_inv * Z_inv;
+            const double X = point_cur.x();
+            const double Y = point_cur.y();
+            Eigen::Matrix<double, 2, 6> J_pixel_xi;
+            J_pixel_xi(0, 0) = fx * Z_inv;
+            J_pixel_xi(0, 1) = 0;
+            J_pixel_xi(0, 2) = -fx * X * Z2_inv;
+            J_pixel_xi(0, 3) = -fx * X * Y * Z2_inv;
+            J_pixel_xi(0, 4) = fx + fx * X * X * Z2_inv;
+            J_pixel_xi(0, 5) = -fx * Y * Z_inv;
+
+            J_pixel_xi(1, 0) = 0;
+            J_pixel_xi(1, 1) = fy * Z_inv;
+            J_pixel_xi(1, 2) = -fy * Y * Z2_inv;
+            J_pixel_xi(1, 3) = -fy - fy * Y * Y * Z2_inv;
+            J_pixel_xi(1, 4) = fy * X * Y * Z2_inv;
+            J_pixel_xi(1, 5) = fy * X * Z_inv;
+            for(int pi=0; pi<8; ++pi) {
+                Eigen::Vector2d J_img_pixel = patch_dI_.row(i_ftr * pattern_.size() + pi);
+                jacobian_.block<1,6>(num_pattern*i_ftr+pi, 0) = hw[pi]*J_img_pixel.transpose() * J_pixel_xi;
+            }
+            ref_mat = jacobian_.block<8,6>(num_pattern*i_ftr, 0);
+            //std::cout << "ref method:\n" << jacobian_.block<8,6>(num_pattern*i_ftr, 0) << std::endl;
+        }
+        {
             // jacobian_.block(num_pattern*i_ftr, 0, num_pattern, 6) = ;
-            const auto inv_depth = 1.0 / point_cur.z();
+            const auto inv_depth = 1.0 / point_cur[2];
             const auto fxdx = fx*patch_dI_.block<8, 1>(num_pattern*i_ftr, 0).array();
             const auto fydy = fy*patch_dI_.block<8, 1>(num_pattern*i_ftr, 1).array();
             const auto u = point_cur.x() * inv_depth;
@@ -210,19 +236,9 @@ void hw::Tracker::computeResidual(const Sophus::SE3d& state)
             jacobian_.block<8,1>(num_pattern*i_ftr, 3).array() = hw*(-u*v*fxdx - (1+v*v)*fydy);
             jacobian_.block<8,1>(num_pattern*i_ftr, 4).array() = hw*((1+u*u)*fxdx + u*v*fydy);
             jacobian_.block<8,1>(num_pattern*i_ftr, 5).array() = hw*(-v*fxdx + u*fydy);
-            // std::cout << "new way:" << std::endl;
-            // std::cout << jacobian_.block<8,6>(num_pattern*i_ftr, 0) << std::endl;
 
-            // for(int ip=0; ip<8; ++ip) {
-            //   jacobian_(num_pattern*i_ftr+ip, 0) = hw[ip]*(inv_depth*fxdx[ip]);
-            //   jacobian_(num_pattern*i_ftr+ip, 1) = hw[ip]*(inv_depth*fydy[ip]);
-            //   jacobian_(num_pattern*i_ftr+ip, 2) = hw[ip]*(-inv_depth*u*fxdx[ip] - inv_depth*v*fydy[ip]);
-            //   jacobian_(num_pattern*i_ftr+ip, 3) = hw[ip]*(-u*v*fxdx[ip] - (1+v*v)*fydy[ip]);
-            //   jacobian_(num_pattern*i_ftr+ip, 4) = hw[ip]*((1+u*u)*fxdx[ip] + u*v*fydy[ip]);
-            //   jacobian_(num_pattern*i_ftr+ip, 5) = hw[ip]*(-v*fxdx[ip] + u*fydy[ip]);
-            // }
-            // std::cout << "normal way:" << std::endl;
-            // std::cout << jacobian_.block<8,6>(num_pattern*i_ftr, 0) << std::endl;
+            std::cout << "--------" << std::endl;
+            std::cout << ref_mat - jacobian_.block<8,6>(num_pattern*i_ftr, 0) << std::endl;
         }
     }
 }

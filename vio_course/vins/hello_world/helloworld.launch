@@ -1,0 +1,7 @@
+<launch>
+  <node name="hello_send" pkg="hello_world" type="hello_send" output="screen">
+  </node>
+
+  <node name="hello_get" pkg="hello_world" type="hello_get" output="screen">
+  </node>
+</launch>

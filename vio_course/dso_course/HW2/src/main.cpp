@@ -1,6 +1,7 @@
     #include "track.hpp"
     #include <chrono>
 
+static int grid_size = 10;
     namespace hw
     {
 
@@ -37,7 +38,6 @@
         // setting
         int MaxLevel = 4;
         int MinLevel = 0;
-        const int grid_size = 10;
         std::vector<std::pair<int, int> > pattern;
 
         //* DSO pattern
@@ -76,13 +76,13 @@
             cv::Ptr<cv::FastFeatureDetector> fast = cv::FastFeatureDetector::create(50, true);
             fast->detect(img_gray, fast_point);
 
-            const int cols_per_grid = img_gray.cols/grid_size;
-            const int rows_per_grid = img_gray.rows/grid_size;
+            const int cols_per_grid = ceil(img_gray.cols*1.0/grid_size);
+            const int rows_per_grid = ceil(img_gray.rows*1.0/grid_size);
             // grid choose feature
             for(auto iter = fast_point.begin(); iter != fast_point.end(); ++iter)
             {
-                int grid_x = static_cast<int>((*iter).pt.x) / cols_per_grid;
-                int grid_y = static_cast<int>((*iter).pt.y) / rows_per_grid;
+                int grid_x = static_cast<int>((*iter).pt.x-1) / cols_per_grid;
+                int grid_y = static_cast<int>((*iter).pt.y-1) / rows_per_grid;
                 int k = grid_y*grid_size + grid_x; // in k-th grid
 
                 if(good_fast_point[k].response < (*iter).response)
@@ -151,7 +151,8 @@
         ofs.close();
 
         error = 0;
-        ofs.open("../data/error.txt");
+        std::string file_name = std::string("../data/error_") + std::to_string(grid_size) + ".txt";
+        ofs.open(file_name);
         for(auto it = translation_error.begin(); it != translation_error.end(); ++it)
         {    ofs << *it <<std::endl;  error += *it; }
         ofs.close();
@@ -159,10 +160,14 @@
 
     } // end namespace hw
 
-    int main()
+int main(int argc, char *argv[])
     {
         std::string dataset_dir("../data");
         double error;
+        if(argc == 2) {
+          grid_size = atoi(argv[1]);
+          std::cout << "grid_size=" << grid_size << std::endl;
+        }
         hw::trackFrame(dataset_dir, error);
         return 0;
     }
