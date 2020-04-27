@@ -6,13 +6,10 @@ import numpy as np
 import time
 import os
 import struct
-import wegatron_octree
 
 import octree as octree
 import kdtree as kdtree
 from result_set import KNNResultSet, RadiusNNResultSet
-import open3d as o3d
-
 
 def read_velodyne_bin(path):
     '''
@@ -23,50 +20,18 @@ def read_velodyne_bin(path):
     with open(path, 'rb') as f:
         content = f.read()
         pc_iter = struct.iter_unpack('ffff', content)
-        # count = 0
         for idx, point in enumerate(pc_iter):
             pc_list.append([point[0], point[1], point[2]])
-            # count = count + 1
-            # if count == 2000:
-            #   break
-    return np.asarray(pc_list, dtype=np.float32)  # 这里修改了一下, 多了一个转置
-
-
-def visualize_result(point_cloud_db, knn_result_set=None, radius_result_set=None, show=True):
-    if not show:
-        return
-    #生成原点云
-    point_cloud = o3d.geometry.PointCloud()  # 要显示的原始点云
-    knn_result_cloud = o3d.geometry.PointCloud()  # 要显示的Knn搜索结果
-    radius_result_cloud = o3d.geometry.PointCloud()  # 要显示的Knn搜索结果
-    point_cloud.points = o3d.utility.Vector3dVector(point_cloud_db)
-    # point_cloud.colors =
-    if knn_result_set is not None:
-        result_point = [[] for i in range(knn_result_set.capacity)]
-        for i in range(knn_result_set.capacity):
-            result_point[i] = point_cloud_db[knn_result_set.dist_index_list[i].index] + 0.001
-        knn_result_cloud.points = o3d.utility.Vector3dVector(np.asarray(result_point))
-        knn_result_cloud.paint_uniform_color([0,0,0])
-
-    if radius_result_set is not None:
-        if radius_result_set.count == 0:
-            return
-        result_point = [[] for i in range(radius_result_set.count)]
-        for i in range(radius_result_set.count):
-            result_point[i] = point_cloud_db[radius_result_set.dist_index_list[i].index] + 0.001
-        radius_result_cloud.points = o3d.utility.Vector3dVector(np.asarray(result_point))
-        radius_result_cloud.paint_uniform_color([0,0,1])
-    o3d.visualization.draw_geometries([knn_result_cloud] + [radius_result_cloud]+[point_cloud])
-
+    return np.asarray(pc_list, dtype=np.float32).T
 
 def main():
     # configuration
-    leaf_size = 5
+    leaf_size = 32
     min_extent = 0.0001
-    k = 10
-    radius = 40
+    k = 8
+    radius = 1
 
-    root_dir = '/media/wegatron/data/workspace/zsw_course/point_cloud_course/HW2/test_data'  # 数据集路径
+    root_dir = '/Users/renqian/cloud_lesson/kitti' # 数据集路径
     cat = os.listdir(root_dir)
     iteration_num = len(cat)
 
@@ -85,14 +50,10 @@ def main():
 
         query = db_np[0,:]
 
-        print('query:', query)
-
         begin_t = time.time()
-        nn_result_set = KNNResultSet(capacity=k)
-        octree.octree_knn_search(root, db_np, nn_result_set, query)
+        result_set = KNNResultSet(capacity=k)
+        octree.octree_knn_search(root, db_np, result_set, query)
         knn_time_sum += time.time() - begin_t
-
-        print('query:', query)
 
         begin_t = time.time()
         result_set = RadiusNNResultSet(radius=radius)
@@ -104,25 +65,6 @@ def main():
         nn_idx = np.argsort(diff)
         nn_dist = diff[nn_idx]
         brute_time_sum += time.time() - begin_t
-
-        print('query:', query)
-        oct_cpp = wegatron_octree.octree(db_np, leaf_size, min_extent)
-        inds, dist = oct_cpp.search_knn(query, k)
-        print('---------')
-        print(dist)
-        print('================')
-        print(nn_dist[0:k])
-        print('----------------')
-        knn_res_cpp = KNNResultSet(inds=inds, dist= dist)
-
-        visualize_result(db_np, knn_res_cpp)
-        # check result is right
-        nn_ind = nn_result_set.nearest_nn_index()
-        radius_ind = result_set.nearest_radius_index()
-        if not np.all(radius_ind == nn_idx[:result_set.count]):
-            print('check radius nn False!')
-        if not np.all(nn_ind == nn_idx[:nn_result_set.count]):
-            print('check knn False')
     print("Octree: build %.3f, knn %.3f, radius %.3f, brute %.3f" % (construction_time_sum*1000/iteration_num,
                                                                      knn_time_sum*1000/iteration_num,
                                                                      radius_time_sum*1000/iteration_num,
@@ -164,32 +106,6 @@ def main():
                                                                      brute_time_sum * 1000 / iteration_num))
 
 
-def test_main():
-    # configuration
-    leaf_size = 350
-    min_extent = 0.0001
-    k = 8
-    radius = 1
-
-    root_dir = '/media/wegatron/data/workspace/zsw_course/point_cloud_course/HW2/test_data'  # 数据集路径
-    cat = os.listdir(root_dir)
-    iteration_num = len(cat)
-
-    print("octree --------------")
-    construction_time_sum = 0
-    knn_time_sum = 0
-    radius_time_sum = 0
-    brute_time_sum = 0
-    for i in range(iteration_num):
-        filename = os.path.join(root_dir, cat[i])
-        db_np = read_velodyne_bin(filename)
-        oct = wegatron_octree.octree(db_np, 300, 5.0)
-        query_pt = np.array(db_np[0, :])
-        inds, dist = oct.search_knn(query_pt, 500)
-        knn_res = KNNResultSet(inds=inds, dist=dist)
-        visualize_result(db_np, knn_result_set=knn_res)
-
 
 if __name__ == '__main__':
-    #test_main()
     main()

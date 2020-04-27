@@ -14,15 +14,22 @@ class DistIndex:
 
 
 class KNNResultSet:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.count = 0
-        self.worst_dist = 1e10
-        self.dist_index_list = []
-        for i in range(capacity):
-            self.dist_index_list.append(DistIndex(self.worst_dist, 0))
-
-        self.comparison_counter = 0
+    def __init__(self, capacity=None, inds=None, dist=None):
+        if capacity is not None:
+            self.capacity = capacity
+            self.count = 0
+            self.worst_dist = 1e10
+            self.dist_index_list = []
+            for i in range(capacity):
+                self.dist_index_list.append(DistIndex(self.worst_dist, 0))
+            self.comparison_counter = 0
+        elif inds is not None:
+            self.capacity = inds.shape[0]
+            self.count = inds.shape[0]
+            self.worst_dist = dist[-1]
+            self.dist_index_list = []
+            for i in range(self.count):
+                self.dist_index_list.append(DistIndex(dist[i], inds[i]))
 
     def size(self):
         return self.count
@@ -101,7 +108,7 @@ class RadiusNNResultSet:
         return output
 
     def nearest_radius_index(self):
-        ret = np.array([self.count], dtype=int)
+        ret = np.empty([self.count], dtype=int)
         self.dist_index_list.sort()
         for i in range(self.count):
             ret[i] = self.dist_index_list[i].index
