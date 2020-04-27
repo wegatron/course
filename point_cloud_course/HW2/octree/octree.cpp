@@ -47,7 +47,7 @@ octree::octree(const np::ndarray &db_npt, int leaf_size, float min_extent)
 void octree::build_sub_tree(std::list<octant*> &job_queue)
 {
     const auto sub_root = job_queue.front(); job_queue.pop_front();
-    sub_root->validate(pts_data_.data());
+    //sub_root->validate(pts_data_.data());
     const int pt_num = sub_root->r_ind - sub_root->l_ind;
     assert(pt_num >0);
 
@@ -105,7 +105,7 @@ void octree::build_sub_tree(std::list<octant*> &job_queue)
         child->l_ind = offset;
         child->r_ind = child->l_ind + buffers[i].size()/3;
         offset = child->r_ind;
-        child->validate(pts_data_.data());
+        //child->validate(pts_data_.data());
         job_queue.emplace_back(child);
         sub_root->children[i].reset(child);
     }
@@ -121,8 +121,8 @@ boost::python::tuple octree::search_knn(const np::ndarray &query_pt, int k)
     while(!job_queue.empty()) {
         const octant * sub_root = job_queue.back(); job_queue.pop_back();
         // TODO remove for debug
-        sub_root->validate(pts_data_.data());
-        if(sub_root == nullptr /*|| !sub_root->overlap(res_knn.query_pt, res_knn.worest_radius)*/) continue;
+        //sub_root->validate(pts_data_.data());
+        if(sub_root == nullptr || !sub_root->overlap(res_knn.query_pt, res_knn.worest_radius)) continue;
         // 若radius < worest_radius的点都在当前子树内, 那么只要搜索当前子树即可, 将其他子树的搜索任务清除
         if(sub_root->inside(res_knn.query_pt, res_knn.worest_radius)) job_queue.clear();
         if(sub_root->is_leaf)
