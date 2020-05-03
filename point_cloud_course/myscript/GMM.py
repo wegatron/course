@@ -62,37 +62,24 @@ class GMM(object):
         # 屏蔽开始
         pts_num = data.shape[0]
         self.mu = data[random.sample(range(pts_num), self.n_clusters)]
+        #self.mu = [[0, -1], [6, 0], [0, 9]]
         for i in range(self.n_clusters):
             self.sigma[i] = np.identity(2)
         self.pi[:] = 1.0/self.n_clusters
         gamma_znk = np.empty([pts_num, self.n_clusters], np.float)
-        plt.figure(figsize=(10, 8))
-        plt.axis([-10, 15, -5, 15])
-        plt.scatter(data[:, 0], data[:, 1], s=5)
-        plt.show()
-        ellipsis_list = []
         for itr in range(self.max_iter):
-            if len(ellipsis_list) != 0:
-                for k in range(self.n_clusters):
-                    ellipsis_list[k].remove()
-            ellipsis_list.clear()
             for k in range(self.n_clusters):
-                ellipsis_list.append(plot_cov_ellipse(self.sigma[k], self.mu[k], fill=False, lw=3, color='#0000FF'))
-
+                gamma_znk[:, k] = self.pi[k] * multivariate_normal.pdf(data, mean=self.mu[k], cov=self.sigma[k])
+            gamma_znk = gamma_znk/gamma_znk.sum(axis=1).reshape(-1, 1)
             for k in range(self.n_clusters):
-                gamma_znk[:, k] = self.pi[k] * multivariate_normal.pdf(data, mean=self.mu[k], cov=np.diag(self.sigma[k]))
-            gamma_znk = gamma_znk / gamma_znk.sum(axis=1).reshape(-1, 1)  # normalized each row to one
-
-            for k in range(self.n_clusters):
-                gznk = gamma_znk[:, k]
+                gznk = gamma_znk[:, k].reshape(-1, 1)
                 nk = np.sum(gznk)
                 inv_nk = 1.0/nk
-                wdata = gznk[:, None] * data
+                wdata = gznk * data
                 self.mu[k] = np.sum(wdata, axis=0) * inv_nk
                 self.pi[k] = nk / self.n_clusters
                 cd = (data - self.mu[k])
-                self.sigma[k] = np.dot(cd.T, gznk[:, None] * cd) * inv_nk
-
+                self.sigma[k] = np.dot(cd.T, gznk * cd) * inv_nk
         # 屏蔽结束
     
     def predict(self, data):
@@ -141,12 +128,15 @@ if __name__ == '__main__':
     X1 = X[(np.argwhere(cat == 0)).flatten()]
     X2 = X[(np.argwhere(cat == 1)).flatten()]
     X3 = X[(np.argwhere(cat == 2)).flatten()]
-    # plt.figure(figsize=(10, 8))
-    # plt.axis([-10, 15, -5, 15])
-    # plt.scatter(X1[:, 0], X1[:, 1], s=5)
-    # plt.scatter(X2[:, 0], X2[:, 1], s=5)
-    # plt.scatter(X3[:, 0], X3[:, 1], s=5)
-    # plt.show()
+    plt.figure(figsize=(10, 8))
+    plt.axis([-10, 15, -5, 15])
+    plt.scatter(X1[:, 0], X1[:, 1], s=5)
+    plt.scatter(X2[:, 0], X2[:, 1], s=5)
+    plt.scatter(X3[:, 0], X3[:, 1], s=5)
+    for k in range(gmm.n_clusters):
+        plot_args = {'fc': 'None', 'lw': 2, 'edgecolor': '#0000FF', 'alpha': 0.5}
+        plot_cov_ellipse(gmm.sigma[k], gmm.mu[k], **plot_args)
+    plt.show()
     # 初始化
 
     
