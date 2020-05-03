@@ -114,7 +114,7 @@ void octree::build_sub_tree(std::list<octant*> &job_queue)
 boost::python::tuple octree::search_knn(const np::ndarray &query_pt, int k)
 {
     float * qpt = reinterpret_cast<float*>(query_pt.get_data());
-    std::cout << "qpt in c++:" << qpt[0] << " " << qpt[1] << " " << qpt[2] << std::endl;
+    //std::cout << "qpt in c++:" << qpt[0] << " " << qpt[1] << " " << qpt[2] << std::endl;
     result_set_knn res_knn(k, Eigen::Vector3f(qpt[0], qpt[1], qpt[2]));
     std::list<const octant*> job_queue;
     job_queue.emplace_back(root_.get());
@@ -122,7 +122,7 @@ boost::python::tuple octree::search_knn(const np::ndarray &query_pt, int k)
         const octant * sub_root = job_queue.back(); job_queue.pop_back();
         // TODO remove for debug
         //sub_root->validate(pts_data_.data());
-        if(sub_root == nullptr || !sub_root->overlap(res_knn.query_pt, res_knn.worest_radius)) continue;
+        if(sub_root == nullptr || !sub_root->overlap(res_knn.query_pt, res_knn.worest_radius2)) continue;
         // 若radius < worest_radius的点都在当前子树内, 那么只要搜索当前子树即可, 将其他子树的搜索任务清除
         if(sub_root->inside(res_knn.query_pt, res_knn.worest_radius)) job_queue.clear();
         if(sub_root->is_leaf)
@@ -164,6 +164,63 @@ boost::python::tuple octree::search_knn(const np::ndarray &query_pt, int k)
     return make_tuple(inds, dist);
 }
 
+boost::python::tuple octree::search_radius(const boost::python::numpy::ndarray &query_pt, float radius)
+{
+    float * qpt = reinterpret_cast<float*>(query_pt.get_data());
+    //std::cout << "qpt in c++:" << qpt[0] << " " << qpt[1] << " " << qpt[2] << std::endl;
+    result_set_radius res_radius(radius, Eigen::Vector3f(qpt[0], qpt[1], qpt[2]));
+    std::list<octant*> job_queue; job_queue.emplace_back(root_.get());
+    while(!job_queue.empty()) {
+        auto sub_root = job_queue.back(); job_queue.pop_back();
+
+        if(sub_root==nullptr || !sub_root->overlap(res_radius.query_pt, res_radius.radius2)) continue;
+
+        // 若radius < worest_radius的点都在当前子树内, 那么只要搜索当前子树即可, 将其他子树的搜索任务清除
+        if(sub_root->inside(res_radius.query_pt, res_radius.radius)) job_queue.clear();
+
+        if(sub_root->is_leaf || sub_root->contains(res_radius.query_pt, res_radius.radius))
+        {
+            float * pts = pts_data_.data() + sub_root->l_ind * 3;
+            for(int i=sub_root->l_ind; i<sub_root->r_ind; ++i)
+            {
+                Eigen::Vector3f tmp_pt(pts);
+                float dis2 = (tmp_pt-res_radius.query_pt).squaredNorm();
+                if(dis2 < res_radius.radius2) res_radius.add_point(i, sqrt(dis2));
+                pts += 3;
+            }
+            continue;
+        }
+
+        // search children
+        unsigned char code = 0;
+        if(res_radius.query_pt[0] > sub_root->center[0]) code |= 1;
+        if(res_radius.query_pt[1] > sub_root->center[1]) code |= 2;
+        if(res_radius.query_pt[2] > sub_root->center[2]) code |= 4;
+
+        for(int i=0; i<8; ++i) {
+            if(i == code || sub_root->children[i] == nullptr) continue;
+            job_queue.emplace_back(sub_root->children[i].get());
+        }
+        if(sub_root->children[code] != nullptr) job_queue.emplace_back(sub_root->children[code].get());
+    }
+
+    // transform result
+    const int k = res_radius.res.size();
+    std::sort(res_radius.res.begin(), res_radius.res.end());
+
+    np::ndarray dist = np::empty(boost::python::make_tuple(k), np::dtype::get_builtin<float>());
+    np::ndarray inds = np::empty(boost::python::make_tuple(k), np::dtype::get_builtin<int>());
+    float * dist_data = reinterpret_cast<float*>(dist.get_data());
+    int * inds_data = reinterpret_cast<int*>(inds.get_data());
+
+    for(int i=0; i<k; ++i) {
+        dist_data[i] = res_radius.res[i].first;
+        inds_data[i] = map_ori_inds_[res_radius.res[i].second];
+    }
+    return make_tuple(inds, dist);
+}
+
+
 void octant::validate(float * const pts_data) const
 {
     float * pts = pts_data + l_ind * 3;
@@ -188,5 +245,5 @@ BOOST_PYTHON_MODULE(wegatron_octree) {
     class_<octree>("octree",
         init<const boost::python::numpy::ndarray &, int, double>())
         .def("search_knn", &octree::search_knn)
-        .def("do_nothing", &octree::do_nothint);
+        .def("search_radius", &octree::search_radius);
 }

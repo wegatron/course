@@ -76,12 +76,16 @@ class KNNResultSet:
 
 
 class RadiusNNResultSet:
-    def __init__(self, radius):
+    def __init__(self, radius, inds_radius=None, dis=None):
         self.radius = radius
-        self.count = 0
         self.worst_dist = radius
         self.dist_index_list = []
-
+        if inds_radius is not None:
+            self.count = inds_radius.shape[0]
+            for i in range(self.count):
+                self.dist_index_list.append(DistIndex(dis[i], inds_radius[i]))
+        else:
+            self.count = 0
         self.comparison_counter = 0
 
     def size(self):

@@ -48,3 +48,10 @@ backup
 devel
 .catkin_workspace
 data
+*.pdf
+*.bin
+*.jpg
+*.png
+manual_vio
+__pycache__
+*_cpy

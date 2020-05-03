@@ -7,6 +7,7 @@ import time
 
 from result_set import KNNResultSet, RadiusNNResultSet
 
+
 # 节点，构成OCtree的基本元素
 class Octant:
     def __init__(self, children, center, extent, point_indices, is_leaf):
@@ -24,6 +25,7 @@ class Octant:
         output += 'children: ' + str([x is not None for x in self.children]) + ", "
         output += 'point_indices: ' + str(self.point_indices)
         return output
+
 
 # 功能：翻转octree
 # 输入：
@@ -43,6 +45,7 @@ def traverse_octree(root: Octant, depth, max_depth):
         for child in root.children:
             traverse_octree(child, depth, max_depth)
     depth[0] -= 1
+
 
 # 功能：通过递归的方式构建octree
 # 输入：
@@ -66,9 +69,32 @@ def octree_recursive_build(root, db, center, extent, point_indices, leaf_size, m
     else:
         # 作业4
         # 屏蔽开始
-        
+        children_point_indices = [[] for i in range(8)]
+        for pt_idx in point_indices:
+            morton_code = 0
+            if db[pt_idx, 0] > center[0]:
+                morton_code = morton_code | 1
+            if db[pt_idx, 1] > center[1]:
+                morton_code = morton_code | 2
+            if db[pt_idx, 2] > center[2]:
+                morton_code = morton_code | 4
+            children_point_indices[morton_code].append(pt_idx)
+        extent = 0.5 * extent
+        cc = np.array([
+            center - extent,
+            [center[0] + extent, center[1] - extent, center[2] - extent],
+            [center[0] - extent, center[1] + extent, center[2] - extent],
+            [center[0] + extent, center[1] + extent, center[2] - extent],
+            [center[0] - extent, center[1] - extent, center[2] + extent],
+            [center[0] + extent, center[1] - extent, center[2] + extent],
+            [center[0] - extent, center[1] + extent, center[2] + extent],
+            [center[0] + extent, center[1] + extent, center[2] + extent]  # 7
+        ])
+        for i in range(8):
+            root.children[i] = octree_recursive_build(root.children[i], db, cc[i], extent, children_point_indices[i], leaf_size, min_extent)
         # 屏蔽结束
     return root
+
 
 # 功能：判断当前query区间是否在octant内
 # 输入：
@@ -89,6 +115,7 @@ def inside(query: np.ndarray, radius: float, octant:Octant):
     query_offset_abs = np.fabs(query_offset)
     possible_space = query_offset_abs + radius
     return np.all(possible_space < octant.extent)
+
 
 # 功能：判断当前query区间是否和octant有重叠部分
 # 输入：
@@ -148,6 +175,7 @@ def contains(query: np.ndarray, radius: float, octant:Octant):
     query_offset_to_farthest_corner = query_offset_abs + octant.extent
     return np.linalg.norm(query_offset_to_farthest_corner) < radius
 
+
 # 功能：在octree中查找信息
 # 输入：
 #    root: octree
@@ -161,9 +189,56 @@ def octree_radius_search_fast(root: Octant, db: np.ndarray, result_set: RadiusNN
     # 作业5
     # 提示：尽量利用上面的inside、overlaps、contains等函数
     # 屏蔽开始
-    
-    # 屏蔽结束
+    is_cont = contains(query, result_set.radius, root)  # 搜索范围包含此Octant
+    if is_cont or root.is_leaf:
+        diff = np.linalg.norm(np.expand_dims(query, 0) - db[root.point_indices], axis=1)
+        for i in range(diff.shape[0]):
+            result_set.add_point(diff[i], root.point_indices[i])
+        return (not is_cont) and (query, result_set.worstDist(), root)
 
+    # dis = []
+    # index = []
+    # for i in range(8):
+    #     if (root.children[i] is None) or (not overlaps(query, result_set.radius, root.children[i])):
+    #         continue
+    #     dis.append(np.linalg.norm(root.children[i].center - query))
+    #     index.append(i)
+    # dis_array = np.array(dis)
+    # index_array = np.array(index)
+    # sorted_idx = index[np.argsort(dis)]
+    # for i in sorted_idx:
+    #     if octree_radius_search_fast(root.children[i], db, result_set, query):
+    #         return True
+
+    # for c, child in enumerate(root.children):
+    #     if child is None:
+    #         continue
+    #     if not overlaps(query, result_set.worstDist(), child):
+    #         continue
+    #     if octree_radius_search_fast(child, db, result_set, query):
+    #         return True
+
+    # go to the relevant child first
+    morton_code = 0
+    if query[0] > root.center[0]:
+        morton_code = morton_code | 1
+    if query[1] > root.center[1]:
+        morton_code = morton_code | 2
+    if query[2] > root.center[2]:
+        morton_code = morton_code | 4
+
+    if octree_radius_search(root.children[morton_code], db, result_set, query):
+        return True
+
+    # check other children
+    for c, child in enumerate(root.children):
+        if c == morton_code or child is None:
+            continue
+        if not overlaps(query, result_set.worstDist(), child):
+            continue
+        if octree_radius_search(child, db, result_set, query):
+            return True
+    # 屏蔽结束
     return inside(query, result_set.worstDist(), root)
 
 
@@ -188,11 +263,31 @@ def octree_radius_search(root: Octant, db: np.ndarray, result_set: RadiusNNResul
 
     # 作业6
     # 屏蔽开始
-    
+    # go to the relevant child first
+    morton_code = 0
+    if query[0] > root.center[0]:
+        morton_code = morton_code | 1
+    if query[1] > root.center[1]:
+        morton_code = morton_code | 2
+    if query[2] > root.center[2]:
+        morton_code = morton_code | 4
+
+    if octree_radius_search(root.children[morton_code], db, result_set, query):
+        return True
+
+    # check other children
+    for c, child in enumerate(root.children):
+        if c == morton_code or child is None:
+            continue
+        if not overlaps(query, result_set.worstDist(), child):
+            continue
+        if octree_radius_search(child, db, result_set, query):
+            return True
     # 屏蔽结束
 
     # final check of if we can stop search
     return inside(query, result_set.worstDist(), root)
+
 
 # 功能：在octree中查找最近的k个近邻
 # 输入：
@@ -215,11 +310,31 @@ def octree_knn_search(root: Octant, db: np.ndarray, result_set: KNNResultSet, qu
 
     # 作业7
     # 屏蔽开始
-    
+    # go to the relevant child first
+    morton_code = 0
+    if query[0] > root.center[0]:
+        morton_code = morton_code | 1
+    if query[1] > root.center[1]:
+        morton_code = morton_code | 2
+    if query[2] > root.center[2]:
+        morton_code = morton_code | 4
+
+    if octree_knn_search(root.children[morton_code], db, result_set, query):
+        return True
+
+    # check other children
+    for c, child in enumerate(root.children):
+        if c == morton_code or child is None:
+            continue
+        if not overlaps(query, result_set.worstDist(), child):
+            continue
+        if octree_knn_search(child, db, result_set, query):
+            return True
     # 屏蔽结束
 
     # final check of if we can stop search
     return inside(query, result_set.worstDist(), root)
+
 
 # 功能：构建octree，即通过调用octree_recursive_build函数实现对外接口
 # 输入：
@@ -231,7 +346,7 @@ def octree_construction(db_np, leaf_size, min_extent):
     db_np_min = np.amin(db_np, axis=0)
     db_np_max = np.amax(db_np, axis=0)
     db_extent = np.max(db_np_max - db_np_min) * 0.5
-    db_center = np.mean(db_np, axis=0)
+    db_center = db_np_min + db_extent
 
     root = None
     root = octree_recursive_build(root, db_np, db_center, db_extent, list(range(N)),
@@ -239,11 +354,12 @@ def octree_construction(db_np, leaf_size, min_extent):
 
     return root
 
+
 def main():
     # configuration
     db_size = 64000
     dim = 3
-    leaf_size = 4
+    leaf_size = 40
     min_extent = 0.0001
     k = 8
 
@@ -251,21 +367,21 @@ def main():
 
     root = octree_construction(db_np, leaf_size, min_extent)
 
-    # depth = [0]
-    # max_depth = [0]
-    # traverse_octree(root, depth, max_depth)
-    # print("tree max depth: %d" % max_depth[0])
+    depth = [0]
+    max_depth = [0]
+    traverse_octree(root, depth, max_depth)
+    print("tree max depth: %d" % max_depth[0])
 
-    # query = np.asarray([0, 0, 0])
-    # result_set = KNNResultSet(capacity=k)
-    # octree_knn_search(root, db_np, result_set, query)
-    # print(result_set)
-    #
-    # diff = np.linalg.norm(np.expand_dims(query, 0) - db_np, axis=1)
-    # nn_idx = np.argsort(diff)
-    # nn_dist = diff[nn_idx]
-    # print(nn_idx[0:k])
-    # print(nn_dist[0:k])
+    query = np.asarray([0, 0, 0])
+    result_set = KNNResultSet(capacity=k)
+    octree_knn_search(root, db_np, result_set, query)
+    print(result_set)
+    print('------------------------')
+    diff = np.linalg.norm(np.expand_dims(query, 0) - db_np, axis=1)
+    nn_idx = np.argsort(diff)
+    nn_dist = diff[nn_idx]
+    print(nn_idx[0:k])
+    print(nn_dist[0:k])
 
     begin_t = time.time()
     print("Radius search normal:")
@@ -284,7 +400,6 @@ def main():
         octree_radius_search_fast(root, db_np, result_set, query)
     # print(result_set)
     print("Search takes %.3fms\n" % ((time.time() - begin_t)*1000))
-
 
 
 if __name__ == '__main__':

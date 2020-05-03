@@ -15,8 +15,8 @@ struct result_set_knn
 {
     result_set_knn(size_t k, const Eigen::Vector3f &qpt)
         : capacity(k), query_pt(qpt),
-          worest_radius(std::numeric_limits<float>::infinity()) {
-    }
+          worest_radius(std::numeric_limits<float>::infinity()),
+          worest_radius2(std::numeric_limits<float>::infinity()){}
 
     void add_point(size_t ind, float dis)
     {
@@ -24,13 +24,30 @@ struct result_set_knn
         if(res.size() > capacity) {
             res.pop();
             worest_radius = res.top().first;
+            worest_radius2 = worest_radius * worest_radius;
         }
     }
 
     size_t capacity;
     float worest_radius;
+    float worest_radius2;
     Eigen::Vector3f query_pt;
     std::priority_queue<std::pair<float, size_t>> res; //!< max heap by first element
+};
+
+struct result_set_radius
+{
+    result_set_radius(float r, const Eigen::Vector3f &qpt)
+        :radius(r), radius2(r*r), query_pt(qpt) {}
+
+    void add_point(size_t ind, float dis)
+    {
+        res.emplace_back(dis, ind);
+    }
+    float radius;
+    float radius2;
+    Eigen::Vector3f query_pt;
+    std::vector<std::pair<float, size_t>> res;
 };
 
 struct octant
@@ -53,7 +70,7 @@ struct octant
     /**
      * @brief 是否与子树有交集
      */
-    bool overlap(const Eigen::Vector3f &query_pt, const float radius) const
+    bool overlap(const Eigen::Vector3f &query_pt, const float radius2) const
     {
         float max_pt[3] = {center[0]+extent, center[1]+extent, center[2]+extent};
         float min_pt[3] = {center[0]-extent, center[1]-extent, center[2]-extent};
@@ -67,7 +84,18 @@ struct octant
         if(query_pt[2] > max_pt[2]) sq_dis += (query_pt[2] - max_pt[2])*(query_pt[2] - max_pt[2]);
         else if(query_pt[2] < min_pt[2]) sq_dis += (query_pt[2] - min_pt[2])*(query_pt[2] - min_pt[2]);
 
-        return sq_dis < radius * radius;
+        return sq_dis < radius2;
+    }
+
+    /**
+     * @brief 子树被搜索区域包含
+     */
+    bool contains(const Eigen::Vector3f &query_pt, const float raidus) const
+    {
+        Eigen::Vector3f diff(fabs(query_pt[0] - center[0]) + extent,
+                             fabs(query_pt[1] - center[1]) + extent,
+                             fabs(query_pt[2] - center[2]) + extent);
+        return raidus*raidus > diff.squaredNorm();
     }
 
     // for debug
@@ -79,7 +107,7 @@ class octree
 public:
     octree(const np::ndarray &db_npt, int leaf_size, float min_extent);
     boost::python::tuple search_knn(const np::ndarray &query_pt, int k);
-    void do_nothint(const np::ndarray &qpt) {}
+    boost::python::tuple search_radius(const np::ndarray &query_pt, float radius);
 private:
     void build_sub_tree(std::list<octant*> &job);
 

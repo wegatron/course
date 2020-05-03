@@ -1,6 +1,7 @@
 # 该文件定义了在树中查找数据所需要的数据结构，类似一个中间件
 
 import copy
+import numpy as np
 
 
 class DistIndex:
@@ -13,15 +14,22 @@ class DistIndex:
 
 
 class KNNResultSet:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.count = 0
-        self.worst_dist = 1e10
-        self.dist_index_list = []
-        for i in range(capacity):
-            self.dist_index_list.append(DistIndex(self.worst_dist, 0))
-
-        self.comparison_counter = 0
+    def __init__(self, capacity=None, inds=None, dist=None):
+        if capacity is not None:
+            self.capacity = capacity
+            self.count = 0
+            self.worst_dist = 1e10
+            self.dist_index_list = []
+            for i in range(capacity):
+                self.dist_index_list.append(DistIndex(self.worst_dist, 0))
+            self.comparison_counter = 0
+        elif inds is not None:
+            self.capacity = inds.shape[0]
+            self.count = inds.shape[0]
+            self.worst_dist = dist[-1]
+            self.dist_index_list = []
+            for i in range(self.count):
+                self.dist_index_list.append(DistIndex(dist[i], inds[i]))
 
     def size(self):
         return self.count
@@ -40,6 +48,7 @@ class KNNResultSet:
         if self.count < self.capacity:
             self.count += 1
 
+        # 插入排序
         i = self.count - 1
         while i > 0:
             if self.dist_index_list[i-1].distance > dist:
@@ -59,14 +68,24 @@ class KNNResultSet:
         output += 'In total %d comparison operations.' % self.comparison_counter
         return output
 
+    def nearest_nn_index(self):
+        ret = np.empty([self.count], dtype=int)
+        for i in range(self.count):
+            ret[i] = self.dist_index_list[i].index
+        return ret
+
 
 class RadiusNNResultSet:
-    def __init__(self, radius):
+    def __init__(self, radius, inds_radius=None, dis=None):
         self.radius = radius
-        self.count = 0
         self.worst_dist = radius
         self.dist_index_list = []
-
+        if inds_radius is not None:
+            self.count = inds_radius.shape[0]
+            for i in range(self.count):
+                self.dist_index_list.append(DistIndex(dis[i], inds_radius[i]))
+        else:
+            self.count = 0
         self.comparison_counter = 0
 
     def size(self):
@@ -92,4 +111,10 @@ class RadiusNNResultSet:
                   % (self.count, self.radius, self.comparison_counter)
         return output
 
+    def nearest_radius_index(self):
+        ret = np.empty([self.count], dtype=int)
+        self.dist_index_list.sort()
+        for i in range(self.count):
+            ret[i] = self.dist_index_list[i].index
+        return ret
 
