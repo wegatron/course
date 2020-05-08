@@ -8,13 +8,17 @@
 void gaussian_process_ground_seg::gen_polar_bin_grid(
      pcl::PointCloud<pcl::PointXYZ>::Ptr &pts)
 {
+    //clear the dara in polar_bins_
+    polar_bins_.clear();
+    polar_bins_.resize(params_.num_bins_a*params_.num_bins_l);
+
     // gen polar bin grid
     float bsize_rad_inv = params_.num_bins_a/360.0;
     float bsize_lin_inv = params_.num_bins_l/params_.rmax;
 
     float rad_off = 180.0 * bsize_rad_inv;
     float rad_tr = 180.0 * bsize_rad_inv / M_PI;
-    std::vector<std::vector<range_height>> rh_buffer(params_.num_bins_a * params_.num_bins_l);
+
     const int num_pts = pts->size();
     for (auto i=0; i<num_pts; ++i) {
         const auto &pt = pts->points[i];
@@ -23,64 +27,49 @@ void gaussian_process_ground_seg::gen_polar_bin_grid(
         //int rad_ind = (180 + atan2(pt.y, pt.x) * 180 / M_PI) / bsize_rad;
         int rad_ind = static_cast<int>(rad_off + atan2(pt.y, pt.x) * rad_tr);
         int lin_ind = static_cast<int>(tmp_r * bsize_lin_inv);
-        rh_buffer[rad_ind*params_.num_bins_l + lin_ind].push_back({pt.z, tmp_r, i, false});
-    }
-
-    int valid_pt_cnt = 0;
-    for(int i=0; i<params_.num_bins_a; ++i)
-    {
-        for(int j=0; j<params_.num_bins_l; ++j)
+        auto &current_pb = polar_bins_[rad_ind*params_.num_bins_l + lin_ind];
+        if(current_pb.cell_pt_inds.size() == 0 || current_pb.height>pt.z)
         {
-            auto &cur_cell = rh_buffer[i*params_.num_bins_l + j];
-            if(cur_cell.size() < 5) continue;
-            rh_pts_[i].insert(rh_pts_[i].end(), cur_cell.begin(), cur_cell.end());
-            valid_pt_cnt += cur_cell.size();
+            current_pb.index = i;
+            current_pb.height = pt.z;
+            current_pb.r = tmp_r;
         }
+        current_pb.cell_pt_inds.push_back(i);
     }
-    std::cout << "valid pt num:" << valid_pt_cnt << std::endl;
 }
 
 void gaussian_process_ground_seg::extract_seed(const int ind,
                                                const pcl::PointCloud<pcl::PointXYZ>::Ptr &pts,
-                                               std::vector<range_height> &current_model,
-                                               std::vector<range_height> &sig_pts)
+                                               std::vector<polar_bin_cell*> &current_model,
+                                               std::vector<polar_bin_cell*> &sig_pts)
 {
     current_model.clear();
     sig_pts.clear();
-    // sort and find candicate seed groud points
-    auto &pb = rh_pts_[ind];
-    std::sort(pb.begin(), pb.end(),
-              [](const range_height &a, const range_height &b){return a.height < b.height;});
-    size_t num_points = std::min(params_.num_seed_points, pb.size());
-    std::vector<range_height> signal_points;
-    for(int j=0; j<pb.size(); ++j)
+    const int start_ind = ind * params_.num_bins_l;
+    const int end_ind = start_ind + params_.num_bins_l;
+    for(int i=start_ind; i<end_ind; ++i)
     {
-        if(current_model.size()<num_points
-           && pb[j].r < params_.max_seed_range
-           && pb[j].height < params_.max_seed_height)
-        {
-            pb[j].is_ground = true;
-            current_model.emplace_back(pb[j]);
-        } else sig_pts.emplace_back(pb[j]);
+        auto &pbc = polar_bins_[i];
+        if(pbc.cell_pt_inds.size() < 5) continue;
+        if(pbc.r < params_.max_seed_range
+           && pbc.height < params_.max_seed_height)
+            current_model.emplace_back(&pbc);
+        else sig_pts.emplace_back(&pbc);
     }
 
     //std::cout << "rh pts:" << rh_pts_[ind].size() << std::endl;
-    #if 0
+    #if 1
     {
         std::stringstream ss;
         ss << "/home/wegatron/tmp/seed" << std::setw(4) << std::setfill('0') << ind << ".vtk";
         pcl::PointCloud<pcl::PointXYZ>::Ptr model_pc(new pcl::PointCloud<pcl::PointXYZ>);
         model_pc->resize(current_model.size());
         for(int i=0; i<current_model.size(); ++i)
-        {
-            model_pc->points[i] = pts->points[current_model[i].index];
-        }
+            model_pc->points[i] = pts->points[current_model[i]->index];
         pcl::PointCloud<pcl::PointXYZ>::Ptr sig_pc(new pcl::PointCloud<pcl::PointXYZ>);
         sig_pc->resize(sig_pts.size());
         for(int i=0; i<sig_pts.size(); ++i)
-        {
-            sig_pc->points[i] = pts->points[sig_pts[i].index];
-        }
+            sig_pc->points[i] = pts->points[sig_pts[i]->index];
         zsw::point_clouds2vtk_file(ss.str(), {model_pc, sig_pc});
     }
     #endif
@@ -94,22 +83,21 @@ std::vector<uint8_t> gaussian_process_ground_seg::segment(pcl::PointCloud<pcl::P
     std::vector<uint8_t> labels(num_pts, false);
     if(num_pts <= 10) return labels;
     gen_polar_bin_grid(pts);
-    std::vector<range_height> current_model;
-    std::vector<range_height> sig_pts;
-    for(int i=0; i<params_.num_bins_a; ++i) {
+    std::vector<polar_bin_cell*> current_model;
+    std::vector<polar_bin_cell*> sig_pts;
+    for(int i=9; i<params_.num_bins_a; ++i) {
         std::cout << i << "/" << params_.num_bins_a << std::endl;
         extract_seed(i, pts, current_model, sig_pts);
         if(current_model.size() <= 2) continue;
-        std::cout << "insac..." << std::endl;
-        // insac
-        insac(pts, 100, current_model, sig_pts);
+//        std::cout << "insac..." << std::endl;
+//        // insac
+//        insac(pts, 100, current_model, sig_pts);
 
-        break;
-        // result to labels
-        for(const auto &tmp_rh : current_model)
-            labels[tmp_rh.index] = 1;
+//        // result to labels
+//        for(const auto &tmp_rh : current_model)
+//            labels[tmp_rh.index] = 1;
     }
-    #if 1
+    #if 0
     std::tuple<std::string, int, std::vector<float>> attr;
     std::get<0>(attr) = "is_ground";
     std::get<1>(attr) = 1; // attribute dimension
@@ -124,9 +112,10 @@ std::vector<uint8_t> gaussian_process_ground_seg::segment(pcl::PointCloud<pcl::P
 
 void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pts,
                                         const int max_iter,
-                                        std::vector<range_height> &current_model,
-                                        std::vector<range_height> &sig_pts)
+                                        std::vector<polar_bin_cell*> &current_model,
+                                        std::vector<polar_bin_cell*> &sig_pts)
 {
+#if 0
     // insac
     const float len_scale = 1.0/(2*params_.p_l*params_.p_l);
     int alter_cnt = 0;
@@ -265,4 +254,5 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
     }while(alter_cnt >0 && ++itr_cnt < max_iter);
     std::cout << "tc_pre=" << tc_pre << " tc_val=" << tc_val << " tc_evaluate=" << tc_evaluate << std::endl;
     std::cout << "itr " << itr_cnt << std::endl;
+#endif
 }

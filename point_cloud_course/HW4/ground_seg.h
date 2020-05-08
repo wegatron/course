@@ -13,35 +13,41 @@ struct ground_seg_params {
     size_t num_seed_points = 10;
 
     // for GP model
-    float p_l = 2;  // length parameter, how close points have to be in the
+    float p_l = 4;  // length parameter, how close points have to be in the
     // GP model to correlate them
-    float p_sf = 2;    // scaling on the whole covariance function
-    float p_sn = 0.4;  // the expected noise for the mode
+    float p_sf = 1;    // scaling on the whole covariance function
+    float p_sn = 0.3;  // the expected noise for the mode
     float p_tmodel = 5;  // the required confidence required in order to consider
     // something ground
-    float p_tdata = 0.5;  // scaled value that is required for a query point to be
+    float p_tdata = 0.1;  // scaled value that is required for a query point to be
 
     // seeding parameters
-    float max_seed_range = 50;   // meters
-    float max_seed_height = 10;  // meters
+    float max_seed_range = 30;   // meters
+    float max_seed_height = 0.3;  // meters
 
-    int num_bins_a = 72;
-    int num_bins_l = 200;
+    int num_bins_a = 180;
+    int num_bins_l = 160;
 };
 
-struct range_height
+struct polar_bin_cell
 {
+    std::vector<int> cell_pt_inds;
+
+    // proto ground point
+    int index;
     float height;
     float r;
-    int index;
-    bool is_ground;
+
+    // fit res if proto point is inlier
+    float predict_height;
+    float cov;
 };
 
 class gaussian_process_ground_seg
 {
 public:
     gaussian_process_ground_seg(const ground_seg_params &params)
-        : params_(params), rh_pts_(params.num_bins_a) {}
+        : params_(params), polar_bins_(params.num_bins_a*params.num_bins_l) {}
 
     /**
      * \brief segment point cloud, return labels, 1 for ground and 0 for nonground
@@ -51,13 +57,13 @@ private:
     void gen_polar_bin_grid(pcl::PointCloud<pcl::PointXYZ>::Ptr &pts);
     void extract_seed(const int ind,
                       const pcl::PointCloud<pcl::PointXYZ>::Ptr &pts,
-                      std::vector<range_height> &current_model,
-                      std::vector<range_height> &sig_pts);
+                      std::vector<polar_bin_cell*> &current_model,
+                      std::vector<polar_bin_cell*> &sig_pts);
     Eigen::MatrixXd gp_kernel(const Eigen::VectorXd &x0, const Eigen::VectorXd &x1);
     void insac(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pts,
-               const int max_iter, std::vector<range_height> &model,
-               std::vector<range_height> &sig_pts);
+               const int max_iter, std::vector<polar_bin_cell*> &model,
+               std::vector<polar_bin_cell*> &sig_pts);
     ground_seg_params params_;
-    std::vector<std::vector<range_height>> rh_pts_;
+    std::vector<polar_bin_cell> polar_bins_;
 };
 #endif //GROUND_SEG_H
