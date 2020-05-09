@@ -15,15 +15,15 @@ struct ground_seg_params {
     // for GP model
     float p_l = 4;  // length parameter, how close points have to be in the
     // GP model to correlate them
-    float p_sf = 1;    // scaling on the whole covariance function
-    float p_sn = 0.3;  // the expected noise for the mode
-    float p_tmodel = 5;  // the required confidence required in order to consider
-    // something ground
-    float p_tdata = 0.1;  // scaled value that is required for a query point to be
-
+    float p_sf = 0.04;    // scaling on the whole covariance function
+    float p_sn = 0;  // the expected noise for the mode
+    float p_tmodel = 5;  // the required confidence required in order to consider something ground
+    float p_tdata = 0.3;  // scaled value that is required for a query point to be
+    float p_tg = 0.3;
     // seeding parameters
     float max_seed_range = 30;   // meters
     float max_seed_height = 0.3;  // meters
+    float mount_angle = 0;
 
     int num_bins_a = 180;
     int num_bins_l = 160;
@@ -37,10 +37,7 @@ struct polar_bin_cell
     int index;
     float height;
     float r;
-
-    // fit res if proto point is inlier
-    float predict_height;
-    float cov;
+    bool is_ground;
 };
 
 class gaussian_process_ground_seg
@@ -63,6 +60,7 @@ private:
     void insac(const pcl::PointCloud<pcl::PointXYZ>::Ptr &pts,
                const int max_iter, std::vector<polar_bin_cell*> &model,
                std::vector<polar_bin_cell*> &sig_pts);
+    void label_pc(const int ind, const pcl::PointCloud<pcl::PointXYZ>::Ptr pts, std::vector<uint8_t> &labels);
     ground_seg_params params_;
     std::vector<polar_bin_cell> polar_bins_;
 };
