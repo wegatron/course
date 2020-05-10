@@ -1,10 +1,13 @@
 #ifndef GROUND_SEG_H
 #define GROUND_SEG_H
 
+#include <vector>
+#include <boost/python.hpp>
+#include <boost/python/numpy.hpp>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <vector>
-#include <boost/multi_array.hpp>
+
+namespace np = boost::python::numpy;
 
 struct ground_seg_params {
     // variables
@@ -49,6 +52,11 @@ public:
      * \brief segment point cloud, return labels, 1 for ground and 0 for nonground
      */
     std::vector<uint8_t> segment(pcl::PointCloud<pcl::PointXYZ>::Ptr &pts);
+
+    /**
+     * @brief as segment, a python interface.
+     */
+    np::ndarray segment_py(const np::ndarray &pts);
 private:
     void gen_polar_bin_grid(pcl::PointCloud<pcl::PointXYZ>::Ptr &pts);
     void extract_seed(const int ind,

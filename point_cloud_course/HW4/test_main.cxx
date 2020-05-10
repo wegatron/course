@@ -33,7 +33,7 @@ int main(int argc, char * argv[])
 
   zsw::point_cloud2vtk_file("/home/wegatron/tmp/tmp.vtk", pts_ptr, {});
   ground_seg_params params;
-  gaussian_process_ground_seg gseg(params);
+  gaussian_process_ground_seg gseg("/media/wegatron/data/workspace/zsw_course/point_cloud_course/HW4/config.yaml");
   auto labels = gseg.segment(pts_ptr);
 
   //output

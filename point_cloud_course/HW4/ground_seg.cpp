@@ -4,7 +4,7 @@
 #include <chrono>
 #include <fstream>
 #include <opencv2/opencv.hpp>
-#include <zsw_vtk_io.h>
+//#include <zsw_vtk_io.h>
 
 gaussian_process_ground_seg::gaussian_process_ground_seg(const std::string &config_file)
 {
@@ -47,8 +47,9 @@ void gaussian_process_ground_seg::gen_polar_bin_grid(
         if(tmp_r > params_.rmax) continue;
         float tmp = atan2(pt.y, pt.x)*rad_tr;
         int rad_ind = tmp > 0 ? tmp : tmp+rad_off;
+        rad_ind = rad_ind%params_.num_bins_a;
         //int rad_ind = static_cast<int>(rad_off + atan2(pt.y, pt.x) * rad_tr);
-        int lin_ind = static_cast<int>(tmp_r * bsize_lin_inv);
+        int lin_ind = std::min(params_.num_bins_l-1, static_cast<int>(tmp_r * bsize_lin_inv));
         auto &current_pb = polar_bins_[rad_ind*params_.num_bins_l + lin_ind];
         if(current_pb.cell_pt_inds.size() == 0 || current_pb.height>pt.z)
         {
@@ -74,9 +75,6 @@ void gaussian_process_ground_seg::extract_seed(const int ind,
     const int start_ind = ind * params_.num_bins_l;
     const int end_ind = start_ind + params_.num_bins_l;
 
-    if(ind == 66) {
-        std::cout << "!!!" << std::endl;
-    }
     for(int i=start_ind; i<end_ind-1; ++i)
     {
         if(polar_bins_[i].r > params_.max_seed_range) break;
@@ -124,7 +122,7 @@ void gaussian_process_ground_seg::extract_seed(const int ind,
 //    }
 
     //std::cout << "rh pts:" << rh_pts_[ind].size() << std::endl;
-    #if 1
+    #if 0
     {
         std::stringstream ss;
         ss << "/home/wegatron/tmp/seed" << std::setw(4) << std::setfill('0') << ind << ".vtk";
@@ -194,7 +192,7 @@ std::vector<uint8_t> gaussian_process_ground_seg::segment(pcl::PointCloud<pcl::P
     zsw::point_clouds2vtk_file("/home/wegatron/tmp/segment.vtk", {ground_pts, not_ground_pts});
     #endif
 
-#if 1
+#if 0
     pcl::PointCloud<pcl::PointXYZ>::Ptr ground_pts(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr not_ground_pts(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -225,11 +223,11 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
     const float len_scale = 1.0/(2*params_.p_l*params_.p_l);
     int alter_cnt = 0;
     int itr_cnt = 0;
-    int tc_pre = 0;
-    int tc_val = 0;
-    int tc_evaluate = 0;
+//    int tc_pre = 0;
+//    int tc_val = 0;
+//    int tc_evaluate = 0;
     do {
-        auto tp0 = std::chrono::high_resolution_clock::now();
+        //auto tp0 = std::chrono::high_resolution_clock::now();
         // calculate K_ff^{-1}, K_fy, K_yy
         const int model_size = current_model.size();
         const int sig_size = sig_pts.size();
@@ -291,16 +289,16 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
             K_fy = params_.p_sf * exp(K_fy.array());
         }
 
-        auto tp1 = std::chrono::high_resolution_clock::now();
-        tc_pre += std::chrono::duration_cast<std::chrono::milliseconds>(tp1 - tp0).count();
+//        auto tp1 = std::chrono::high_resolution_clock::now();
+//        tc_pre += std::chrono::duration_cast<std::chrono::milliseconds>(tp1 - tp0).count();
 
         // calc y and cov
         Eigen::MatrixXf tmp_calc = K_fy.transpose() * inv_K_ff;
         Eigen::VectorXf y = tmp_calc * train_y;
         Eigen::MatrixXf cov = K_yy - tmp_calc * K_fy;
 
-        auto tp2 = std::chrono::high_resolution_clock::now();
-        tc_val = std::chrono::duration_cast<std::chrono::milliseconds>(tp2-tp1).count();
+//        auto tp2 = std::chrono::high_resolution_clock::now();
+//        tc_val = std::chrono::duration_cast<std::chrono::milliseconds>(tp2-tp1).count();
 
 #if 0
         {
@@ -332,7 +330,6 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
         alter_cnt = 0;
         for(int i=0; i<sig_size; ++i)
         {
-            float cur_mu = y[i];
             float cur_sqr_sigma_inv = 1.0/cov(i,i);
             float cur_sigma_inv = 0.3984*sqrt(cur_sqr_sigma_inv);
             float p_0 = cur_sigma_inv * exp(-0.5 * (sig_pts[i]->height - y[i]-params_.p_tdata)*cur_sqr_sigma_inv);
@@ -349,13 +346,13 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
             }
         }
 
-        auto tp3 = std::chrono::high_resolution_clock::now();
-        tc_evaluate = std::chrono::duration_cast<std::chrono::milliseconds>(tp3-tp2).count();
+//        auto tp3 = std::chrono::high_resolution_clock::now();
+//        tc_evaluate = std::chrono::duration_cast<std::chrono::milliseconds>(tp3-tp2).count();
         // std::cout << "y:" << y.transpose() << std::endl;
         // std::cout << "cov:\n" << cov << std::endl;
-        std::cout << "alter_cnt:" << alter_cnt << std::endl;
-        std::cout << "model_pts_num=" << current_model.size()
-                  << " sig_pts_num=" << sig_pts.size() << std::endl;
+//        std::cout << "alter_cnt:" << alter_cnt << std::endl;
+//        std::cout << "model_pts_num=" << current_model.size()
+//                  << " sig_pts_num=" << sig_pts.size() << std::endl;
         // debug output
 #if 0
         {
@@ -378,6 +375,32 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
         }
 #endif
     }while(alter_cnt >0 && ++itr_cnt < max_iter);
-    std::cout << "tc_pre=" << tc_pre << " tc_val=" << tc_val << " tc_evaluate=" << tc_evaluate << std::endl;
+//    std::cout << "tc_pre=" << tc_pre << " tc_val=" << tc_val << " tc_evaluate=" << tc_evaluate << std::endl;
     std::cout << "itr " << itr_cnt << std::endl;
+}
+
+boost::python::numpy::ndarray gaussian_process_ground_seg::segment_py(const boost::python::numpy::ndarray &pts_data)
+{
+    const auto pt_num = pts_data.shape(0);
+    float * data_ptr = reinterpret_cast<float*>(pts_data.get_data());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pts(new pcl::PointCloud<pcl::PointXYZ>);
+    pts->resize(pt_num);
+    for(auto i=0; i<pt_num; ++i)
+    {
+        pts->points[i].x = *data_ptr; ++data_ptr;
+        pts->points[i].y = *data_ptr; ++data_ptr;
+        pts->points[i].z = *data_ptr; ++data_ptr;
+    }
+    auto labels = segment(pts);
+    np::ndarray ret = np::empty(boost::python::make_tuple(pt_num), np::dtype::get_builtin<uint8_t>());
+    memcpy(ret.get_data(), labels.data(), pt_num);
+    return ret;
+}
+
+BOOST_PYTHON_MODULE(wegatron_ground_seg) {
+    using namespace boost::python;
+    np::initialize(); // must initialize before using numpy
+    class_<gaussian_process_ground_seg>("gaussian_process_ground_seg",
+                                        init<const std::string &>())
+        .def("segment", &gaussian_process_ground_seg::segment_py);
 }
