@@ -3,8 +3,25 @@
 #include <iomanip>
 #include <chrono>
 #include <fstream>
+#include <opencv2/opencv.hpp>
 #include <zsw_vtk_io.h>
 
+gaussian_process_ground_seg::gaussian_process_ground_seg(const std::string &config_file)
+{
+    cv::FileStorage fs(config_file, cv::FileStorage::READ);
+    fs["rmax"] >> params_.rmax;
+    fs["p_l"] >> params_.p_l;
+    fs["p_sf"] >> params_.p_sf;
+    fs["p_sn"] >> params_.p_sn;
+    fs["p_tmodel"] >> params_.p_tmodel;
+    fs["p_tdata"] >> params_.p_tdata;
+    fs["p_tg"] >> params_.p_tg;
+    fs["max_seed_range"] >> params_.max_seed_range;
+    fs["max_seed_height"] >> params_.max_seed_height;
+    fs["mount_angle"] >> params_.mount_angle;
+    fs["num_bins_a"] >> params_.num_bins_a;
+    fs["num_bins_l"] >> params_.num_bins_l;
+}
 
 /**
  * @brief 将点云按照水平角度和距离划分成polar bin cells, 对于每一个cell, 抽取其最低点作为代表(将来进行高斯过程fitting)

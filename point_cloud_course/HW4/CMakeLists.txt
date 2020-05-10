@@ -28,6 +28,10 @@ add_definitions(-D_USE_MATH_DEFINES)
 #include_directories(${Boost_INCLUDE_DIRS})
 #link_directories(${Boost_LIBRARY_DIRS})
 
+#opencv
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
 #PCL
 find_package(PCL REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
@@ -45,6 +49,7 @@ ${src})
 
 target_link_libraries(${app_name}
   ${ZSW_LIBRARIES}
+  ${OpenCV_LIBS}
   ${PCL_LIBRARIES}
   ${Boost_LIBRARIES}
 )

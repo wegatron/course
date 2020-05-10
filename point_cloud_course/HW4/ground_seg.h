@@ -9,8 +9,6 @@
 struct ground_seg_params {
     // variables
     float rmax = 100;         // max radius of point to consider
-    size_t max_bin_points = 200;  // max number of points to consider per bin
-    size_t num_seed_points = 10;
 
     // for GP model
     float p_l = 32;  // length parameter, how close points have to be in the GP model to correlate them
@@ -43,8 +41,9 @@ struct polar_bin_cell
 class gaussian_process_ground_seg
 {
 public:
+    gaussian_process_ground_seg(const std::string &config_file);
     gaussian_process_ground_seg(const ground_seg_params &params)
-        : params_(params), polar_bins_(params.num_bins_a*params.num_bins_l) {}
+        : params_(params){}
 
     /**
      * \brief segment point cloud, return labels, 1 for ground and 0 for nonground
