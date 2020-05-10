@@ -57,13 +57,18 @@ void gaussian_process_ground_seg::extract_seed(const int ind,
     const int start_ind = ind * params_.num_bins_l;
     const int end_ind = start_ind + params_.num_bins_l;
 
+    if(ind == 66) {
+        std::cout << "!!!" << std::endl;
+    }
     for(int i=start_ind; i<end_ind-1; ++i)
     {
         if(polar_bins_[i].r > params_.max_seed_range) break;
         if(polar_bins_[i].cell_pt_inds.empty()) continue;
-        // find next
+        // 防止太近
+        const float cell_r = params_.rmax/params_.num_bins_l;
         int next_id = i+1;
-        while(next_id<end_ind-1 && polar_bins_[next_id].cell_pt_inds.empty()) ++next_id;
+        while(next_id<end_ind-1
+               && (polar_bins_[next_id].cell_pt_inds.empty() || polar_bins_[next_id].r<polar_bins_[i].r+cell_r)) ++next_id;
         if(next_id == end_ind) break;
         float angle = atan2(polar_bins_[next_id].height - polar_bins_[i].height,
                             polar_bins_[next_id].r - polar_bins_[i].r);
@@ -148,13 +153,12 @@ std::vector<uint8_t> gaussian_process_ground_seg::segment(pcl::PointCloud<pcl::P
     gen_polar_bin_grid(pts);
     std::vector<polar_bin_cell*> current_model;
     std::vector<polar_bin_cell*> sig_pts;
-    for(int i=87; i<params_.num_bins_a; ++i) {
+    for(int i=0; i<params_.num_bins_a; ++i) {
         std::cout << i << "/" << params_.num_bins_a << std::endl;
         extract_seed(i, pts, current_model, sig_pts);
         if(current_model.size() <= 2) continue;
         // insac
         insac(pts, 100, current_model, sig_pts);
-        exit(__LINE__);
         // result to labels
         label_pc(i, pts, labels);
 //        for(const auto &tmp_cell : current_model)
@@ -281,7 +285,7 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
         auto tp2 = std::chrono::high_resolution_clock::now();
         tc_val = std::chrono::duration_cast<std::chrono::milliseconds>(tp2-tp1).count();
 
-#if 1
+#if 0
         {
             std::vector<debug_info> debug_cells(sig_size+model_size);
             for(int i=0; i<current_model.size(); ++i)
@@ -311,9 +315,14 @@ void gaussian_process_ground_seg::insac(const pcl::PointCloud<pcl::PointXYZ>::Pt
         alter_cnt = 0;
         for(int i=0; i<sig_size; ++i)
         {
+            float cur_mu = y[i];
+            float cur_sqr_sigma_inv = 1.0/cov(i,i);
+            float cur_sigma_inv = 0.3984*sqrt(cur_sqr_sigma_inv);
+            float p_0 = cur_sigma_inv * exp(-0.5 * (sig_pts[i]->height - y[i]-params_.p_tdata)*cur_sqr_sigma_inv);
+            float p_1 = cur_sigma_inv * exp(-0.5 *(sig_pts[i]->height - y[i]+params_.p_tdata)*cur_sqr_sigma_inv);
+
             if(y[i] < params_.p_tmodel // y[i] seems fine
-                && fabs(sig_pts[i]->height - y[i]) // uncertainty not very large
-               < params_.p_tdata/(sqrt(params_.p_sn + cov(i, i))))
+                && (p_0+p_1)*params_.p_tdata*0.5>0.8)
             {
                 current_model.push_back(sig_pts[i]);
                 sig_pts[i]->is_ground = true;
